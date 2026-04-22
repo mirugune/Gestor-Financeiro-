@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Finance Pro - Gestão Pessoal</title>
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <style>
+        body {
+            background: #121212;
+            color: #fff;
+            font-family: 'Segoe UI', Arial, sans-serif;
+            padding: 20px;
+            margin: 0;
+        }
+
+        .container {
+            max-width: 500px;
+            margin: auto;
+        }
+
+        .card {
+            background: #1e1e1e;
+            padding: 20px;
+            border-radius: 12px;
+            margin-bottom: 15px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+        }
+
+        h2, h3 { margin-top: 0; }
+
+        input, button, select {
+            width: 100%;
+            padding: 12px;
+            margin-top: 10px;
+            border-radius: 8px;
+            border: none;
+            box-sizing: border-box;
+            font-size: 16px;
+        }
+
+        input, select {
+            background: #2d2d2d;
+            color: white;
+        }
+
+        button {
+            background: #00e676;
+            color: #000;
+            font-weight: bold;
+            cursor: pointer;
+            transition: opacity 0.2s;
+        }
+
+        button:hover { opacity: 0.9; }
+
+        .btn-secondary {
+            background: #333;
+            color: #fff;
+            margin-top: 8px;
+        }
+
+        .green { color: #00e676; }
+        .red { color: #ff5252; }
+
+        .transaction {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px 0;
+            border-bottom: 1px solid #333;
+        }
+
+        .transaction button {
+            width: auto;
+            padding: 5px 10px;
+            margin: 0;
+            background: #ff5252;
+            color: white;
+            font-size: 12px;
+        }
+
+        .report-item {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 8px;
+            font-size: 14px;
+            padding-bottom: 4px;
+            border-bottom: 1px dotted #444;
+        }
+
+        .support-card {
+            border: 2px solid #00e676;
+            text-align: center;
+        }
+
+        .support-card a { text-decoration: none; }
+    </style>
+</head>
+
+<body>
+
+<div class="container">
+
+    <div class="card">
+        <h2>💰 Finance Pro</h2>
+        <p>Saldo: <strong>R$ <span id="balance">0.00</span></strong></p>
+        <p>Receitas: <span class="green" id="income">0.00</span></p>
+        <p>Despesas: <span class="red" id="expense">0.00</span></p>
+    </div>
+
+    <div class="card">
+        <canvas id="chart"></canvas>
+    </div>
+
+    <div class="card">
+        <h3>Nova Transação</h3>
+        <input type="text" id="desc" placeholder="Descrição (Ex: Salário, Aluguel)">
+        <input type="number" id="value" placeholder="Valor (Ex: 100 ou -50 para despesa)">
+
+        <select id="category">
+            <option>Alimentação</option>
+            <option>Contas</option>
+            <option>Bebidas</option>
+            <option>Ifood</option>
+            <option>Lanches</option>
+            <option>Viagem</option>
+            <option>Outros</option>
+        </select>
+
+        <input type="date" id="date">
+        <button onclick="addTransaction()">Adicionar Transação</button>
+    </div>
+
+    <div class="card">
+        <h3>📊 Relatório por Categoria (Mês Atual)</h3>
+        <div id="report"></div>
+    </div>
+
+    <div class="card">
+        <h3>Histórico</h3>
+        <div id="list"></div>
+    </div>
+
+    <div class="card">
+        <h3>⚙️ Backup e Segurança</h3>
+        <p style="font-size: 12px; color: #aaa;">Salve seus dados no celular para não perdê-los ao limpar o navegador.</p>
+        <button class="btn-secondary" onclick="exportData()">Salvar Backup no Celular</button>
+        <input type="file" id="importFile" style="display:none" onchange="importData(event)">
+        <button class="btn-secondary" onclick="document.getElementById('importFile').click()">Carregar Backup Salvo</button>
+    </div>
+
+    <div class="card support-card">
+        <h3>Gostou do App? 🚀</h3>
+        <p>Apoie o desenvolvedor para manter o projeto ativo!</p>
+        <a href="https://mpago.la/1Tj9Z68" target="_blank">
+            <button>Apoiar via Mercado Pago</button>
+        </a>
+    </div>
+
+</div>
+
+<script>
+    let transactions = JSON.parse(localStorage.getItem("transactions")) || [];
+    let chart;
+
+    function setTodayDate() {
+        const today = new Date().toISOString().split("T")[0];
+        document.getElementById("date").value = today;
+    }
+
+    // Inicialização
+    setTodayDate();
+    render();
+
+    function save() {
+        localStorage.setItem("transactions", JSON.stringify(transactions));
+    }
+
+    function addTransaction() {
+        const desc = document.getElementById("desc").value;
+        const value = parseFloat(document.getElementById("value").value);
+        const date = document.getElementById("date").value;
+        const category = document.getElementById("category").value;
+
+        if (!desc || isNaN(value) || !date) return alert("Preencha todos os campos corretamente!");
+
+        transactions.push({ id: Date.now(), desc, value, date, category });
+        save();
+
+        document.getElementById("desc").value = "";
+        document.getElementById("value").value = "";
+        setTodayDate();
+        render();
+    }
+
+    function removeTransaction(id) {
+        if(confirm("Deseja excluir esta transação?")) {
+            transactions = transactions.filter(t => t.id !== id);
+            save();
+            render();
+        }
+    }
+
+    function render() {
+        const list = document.getElementById("list");
+        const report = document.getElementById("report");
+
+        list.innerHTML = "";
+        report.innerHTML = "";
+
+        let income = 0;
+        let expense = 0;
+        let categories = {};
+
+        const currentMonth = new Date().toISOString().slice(0, 7);
+
+        // Processar transações
+        transactions.sort((a, b) => new Date(b.date) - new Date(a.date)).forEach(t => {
+            // Criar elemento da lista
+            const div = document.createElement("div");
+            div.className = "transaction";
+            div.innerHTML = `
+                <div>
+                    <strong>${t.desc}</strong><br>
+                    <small>${t.category} | ${t.date.split('-').reverse().join('/')}</small>
+                </div>
+                <div>
+                    <span class="${t.value > 0 ? 'green' : 'red'}">
+                        R$ ${Math.abs(t.value).toFixed(2)}
+                    </span>
+                    <button onclick="removeTransaction(${t.id})">X</button>
+                </div>
+            `;
+            list.appendChild(div);
+
+            // Somar Totais
+            if (t.value > 0) income += t.value;
+            else expense += t.value;
+
+            // Agrupar categorias do mês atual para o relatório
+            if (t.date.startsWith(currentMonth) && t.value < 0) {
+                if (!categories[t.category]) categories[t.category] = 0;
+                categories[t.category] += Math.abs(t.value);
+            }
+        });
+
+        // Atualizar painel de resumo
+        document.getElementById("income").innerText = income.toFixed(2);
+        document.getElementById("expense").innerText = Math.abs(expense).toFixed(2);
+        document.getElementById("balance").innerText = (income + expense).toFixed(2);
+
+        // Mostrar Relatório por categoria
+        for (let cat in categories) {
+            const item = document.createElement("div");
+            item.className = "report-item";
+            item.innerHTML = `<span>${cat}</span><span>R$ ${categories[cat].toFixed(2)}</span>`;
+            report.appendChild(item);
+        }
+
+        updateChart(income, Math.abs(expense));
+    }
+
+    function updateChart(income, expense) {
+        const ctx = document.getElementById("chart");
+        if (chart) chart.destroy();
+
+        if (income === 0 && expense === 0) return;
+
+        chart = new Chart(ctx, {
+            type: 'doughnut',
+            data: {
+                labels: ['Receitas', 'Despesas'],
+                datasets: [{
+                    data: [income, expense],
+                    backgroundColor: ['#00e676', '#ff5252'],
+                    borderWidth: 0
+                }]
+            },
+            options: {
+                plugins: {
+                    legend: { labels: { color: '#fff' } }
+                }
+            }
+        });
+    }
+
+    // FUNÇÕES DE BACKUP (SALVAR NO CELULAR)
+    function exportData() {
+        if (transactions.length === 0) return alert("Não há dados para exportar.");
+        
+        const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(transactions));
+        const downloadAnchorNode = document.createElement('a');
+        downloadAnchorNode.setAttribute("href", dataStr);
+        downloadAnchorNode.setAttribute("download", "finance_pro_backup.json");
+        document.body.appendChild(downloadAnchorNode);
+        downloadAnchorNode.click();
+        downloadAnchorNode.remove();
+    }
+
+    function importData(event) {
+        const file = event.target.files[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            try {
+                const imported = JSON.parse(e.target.result);
+                if (confirm("Isso irá substituir seus dados atuais. Deseja continuar?")) {
+                    transactions = imported;
+                    save();
+                    render();
+                    alert("Dados importados com sucesso!");
+                }
+            } catch (err) {
+                alert("Erro ao ler o arquivo. Certifique-se de que é o arquivo de backup correto.");
+            }
+        };
+        reader.readAsText(file);
+    }
+</script>
+
+</body>
+</html>>
